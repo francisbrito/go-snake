@@ -5,6 +5,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 	"image/color"
+	"math/rand"
 )
 
 const (
@@ -22,7 +23,7 @@ type Object struct {
 type SnakeDirection int
 
 const (
-	Idle SnakeDirection = iota
+	NoDirection SnakeDirection = iota
 	Up
 	Left
 	Down
@@ -36,17 +37,28 @@ type Snake struct {
 	Direction SnakeDirection
 }
 
+type State int
+
+const (
+	Idle State = iota
+	Started
+	Over
+)
+
 type Game struct {
 	snake           *Snake
 	backgroundColor color.Color
 	gridColor       color.Color
 	tick            int
 	tps             int
+	rand            *rand.Rand
+	seed            int64
+	state           State
 }
 
 func (g *Game) Update() error {
 	g.tick++
-	if g.tick%g.tps < 1 {
+	if g.tick%g.tps == 0 {
 		g.tick = 0
 		switch g.snake.Direction {
 		case Up:
@@ -67,13 +79,17 @@ func (g *Game) Update() error {
 		g.snake.Direction = Left
 	case g.isDownInputPressed():
 		g.snake.Direction = Down
-	case g.isRightPressed():
+	case g.isRightInputPressed():
 		g.snake.Direction = Right
+	}
+	g.checkCollisions()
+	if g.state == Over {
+		g.reset()
 	}
 	return nil
 }
 
-func (g *Game) isRightPressed() bool {
+func (g *Game) isRightInputPressed() bool {
 	return inpututil.IsKeyJustPressed(ebiten.KeyD) || inpututil.IsKeyJustPressed(ebiten.KeyRight)
 }
 
@@ -115,10 +131,34 @@ func (g *Game) drawSnake(screen *ebiten.Image) {
 	vector.DrawFilledRect(screen, x, y, w, h, g.snake.Color, true)
 }
 
+func (g *Game) checkCollisions() {
+	x, y := g.snake.X, g.snake.Y
+	// check walls
+	if x < 0 || x >= Columns || y < 0 || y >= Rows {
+		g.state = Over
+		g.reset()
+	}
+	// todo: check tail
+	// todo: check food
+}
+
+func (g *Game) reset() {
+	g.tick = 0
+	g.seed = rand.Int63()
+	g.rand = rand.New(rand.NewSource(g.seed))
+	g.state = Idle
+	g.snake.X = 10
+	g.snake.Y = 10
+	g.snake.Direction = NoDirection
+}
+
 func New() *Game {
+	seed := rand.Int63()
 	return &Game{
 		backgroundColor: color.Gray{Y: 31},
-		gridColor:       color.Gray{Y: 127},
+		gridColor:       color.Gray{Y: 63},
+		rand:            rand.New(rand.NewSource(seed)),
+		seed:            seed,
 		snake: &Snake{
 			Object: &Object{
 				X: 10,
@@ -126,7 +166,8 @@ func New() *Game {
 				W: 1,
 				H: 1,
 			},
-			Color: color.Gray{Y: 255},
+			Color:     color.Gray{Y: 255},
+			Direction: NoDirection,
 		},
 		tps: ebiten.TPS() / 16,
 	}
