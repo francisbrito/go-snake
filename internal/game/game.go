@@ -45,6 +45,11 @@ const (
 	Over
 )
 
+type Food struct {
+	*Object
+	Color color.Color
+}
+
 type Game struct {
 	snake           *Snake
 	backgroundColor color.Color
@@ -54,6 +59,7 @@ type Game struct {
 	rand            *rand.Rand
 	seed            int64
 	state           State
+	food            *Food
 }
 
 func (g *Game) Update() error {
@@ -113,6 +119,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Fill(g.backgroundColor)
 	g.drawGrid(screen)
 	g.drawSnake(screen)
+	g.drawFood(screen)
 }
 
 func (g *Game) drawGrid(screen *ebiten.Image) {
@@ -139,7 +146,17 @@ func (g *Game) checkCollisions() {
 		g.reset()
 	}
 	// todo: check tail
-	// todo: check food
+	// check food
+	if x == g.food.X && y == g.food.Y {
+		g.snake.Length++
+		g.spawnFood()
+	}
+}
+
+func (g *Game) spawnFood() {
+	// todo: ensure food does not spawn on occupied cells
+	g.food.X = g.rand.Intn(Columns)
+	g.food.Y = g.rand.Intn(Rows)
 }
 
 func (g *Game) reset() {
@@ -150,6 +167,11 @@ func (g *Game) reset() {
 	g.snake.X = 10
 	g.snake.Y = 10
 	g.snake.Direction = NoDirection
+}
+
+func (g *Game) drawFood(screen *ebiten.Image) {
+	x, y, w, h := float32(g.food.X*CellSize), float32(g.food.Y*CellSize), float32(g.food.W*CellSize), float32(g.food.H*CellSize)
+	vector.DrawFilledRect(screen, x, y, w, h, g.food.Color, true)
 }
 
 func New() *Game {
@@ -169,6 +191,20 @@ func New() *Game {
 			Color:     color.Gray{Y: 255},
 			Direction: NoDirection,
 		},
-		tps: ebiten.TPS() / 16,
+		tps: 10,
+		food: &Food{
+			Object: &Object{
+				X: 5,
+				Y: 5,
+				W: 1,
+				H: 1,
+			},
+			Color: color.RGBA{
+				R: 255,
+				G: 127,
+				B: 0,
+				A: 255,
+			},
+		},
 	}
 }
