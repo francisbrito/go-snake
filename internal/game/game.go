@@ -1,7 +1,9 @@
 package game
 
 import (
+	"fmt"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 	"image/color"
@@ -22,6 +24,23 @@ type Object struct {
 
 type SnakeDirection int
 
+func (d SnakeDirection) String() string {
+	switch d {
+	case NoDirection:
+		return "No Direction"
+	case Up:
+		return "Up"
+	case Left:
+		return "Left"
+	case Down:
+		return "Down"
+	case Right:
+		return "Right"
+	default:
+		return fmt.Sprintf("Unknown: %d", d)
+	}
+}
+
 const (
 	NoDirection SnakeDirection = iota
 	Up
@@ -38,6 +57,17 @@ type Snake struct {
 }
 
 type State int
+
+func (s State) String() string {
+	switch s {
+	case Idle:
+		return "Idle"
+	case Over:
+		return "Game Over"
+	default:
+		return fmt.Sprintf("Unknown: %d", s)
+	}
+}
 
 const (
 	Idle State = iota
@@ -60,12 +90,14 @@ type Game struct {
 	seed            int64
 	state           State
 	food            *Food
+	grid            [Columns][Rows]bool
 }
 
 func (g *Game) Update() error {
 	g.tick++
 	if g.tick%g.tps == 0 {
 		g.tick = 0
+		g.grid[g.snake.X][g.snake.Y] = false
 		switch g.snake.Direction {
 		case Up:
 			g.snake.Y -= 1
@@ -76,6 +108,9 @@ func (g *Game) Update() error {
 		case Right:
 			g.snake.X += 1
 		default:
+		}
+		if g.snake.X >= 0 && g.snake.X < Columns && g.snake.Y >= 0 && g.snake.Y < Rows {
+			g.grid[g.snake.X][g.snake.Y] = true
 		}
 	}
 	switch {
@@ -120,6 +155,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	g.drawGrid(screen)
 	g.drawSnake(screen)
 	g.drawFood(screen)
+	g.printDebugInfo(screen)
 }
 
 func (g *Game) drawGrid(screen *ebiten.Image) {
@@ -155,8 +191,10 @@ func (g *Game) checkCollisions() {
 
 func (g *Game) spawnFood() {
 	// todo: ensure food does not spawn on occupied cells
+	g.grid[g.food.X][g.food.Y] = false
 	g.food.X = g.rand.Intn(Columns)
 	g.food.Y = g.rand.Intn(Rows)
+	g.grid[g.food.X][g.food.Y] = true
 }
 
 func (g *Game) reset() {
@@ -174,37 +212,62 @@ func (g *Game) drawFood(screen *ebiten.Image) {
 	vector.DrawFilledRect(screen, x, y, w, h, g.food.Color, true)
 }
 
+func (g *Game) printDebugInfo(screen *ebiten.Image) {
+	msg := fmt.Sprintf("FPS: %2.2f\nTPS: %2.2f (%d)\nState: %s\nS. Speed: %2d\nS. Direction: %s\nS. Tail Length: %2d",
+		ebiten.ActualFPS(), ebiten.ActualTPS(), ebiten.TPS(), g.state, g.tps, g.snake.Direction, g.snake.Length)
+	ebitenutil.DebugPrintAt(screen, msg, 16, 16)
+	//sb := strings.Builder{}
+	//for i := 0; i < Rows; i++ {
+	//	for j := 0; j < Columns; j++ {
+	//		if g.grid[j][i] && g.food.X == j && g.food.Y == i {
+	//			sb.WriteRune('*')
+	//		} else if g.grid[j][i] {
+	//			sb.WriteRune('S')
+	//		} else {
+	//			sb.WriteRune('_')
+	//		}
+	//	}
+	//	sb.WriteRune('\n')
+	//}
+	//ebitenutil.DebugPrintAt(screen, sb.String(), ScreenWidth/2, 16)
+}
+
 func New() *Game {
 	seed := rand.Int63()
-	return &Game{
+	r := rand.New(rand.NewSource(seed))
+	fx, fy, sx, sy := r.Intn(Columns), r.Intn(Rows), r.Intn(Columns), r.Intn(Rows)
+	food := &Food{
+		Object: &Object{
+			X: fx,
+			Y: fy,
+			W: 1,
+			H: 1,
+		},
+		Color: color.RGBA{
+			R: 255,
+			G: 127,
+			B: 0,
+			A: 255,
+		},
+	}
+	g := &Game{
 		backgroundColor: color.Gray{Y: 31},
 		gridColor:       color.Gray{Y: 63},
-		rand:            rand.New(rand.NewSource(seed)),
+		rand:            r,
 		seed:            seed,
 		snake: &Snake{
 			Object: &Object{
-				X: 10,
-				Y: 10,
+				X: sx,
+				Y: sy,
 				W: 1,
 				H: 1,
 			},
 			Color:     color.Gray{Y: 255},
 			Direction: NoDirection,
 		},
-		tps: 10,
-		food: &Food{
-			Object: &Object{
-				X: 5,
-				Y: 5,
-				W: 1,
-				H: 1,
-			},
-			Color: color.RGBA{
-				R: 255,
-				G: 127,
-				B: 0,
-				A: 255,
-			},
-		},
+		tps:  10,
+		food: food,
 	}
+	g.grid[food.X][food.Y] = true
+	return g
 }
